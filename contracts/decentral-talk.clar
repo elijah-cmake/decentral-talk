@@ -402,3 +402,16 @@
         (platform-fee (calculate-platform-fee price))
         (author-payment (- price platform-fee))
       )
+      ;; Execute STX transfers
+      (try! (stx-transfer? author-payment tx-sender author))
+      (try! (stx-transfer? platform-fee tx-sender (var-get platform-treasury)))
+      ;; Grant premium access
+      (map-set premium-access {
+        thread-id: thread-id,
+        user: tx-sender,
+      } { purchased-at: current-time }
+      )
+      (ok true)
+    )
+  )
+)
