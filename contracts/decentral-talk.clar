@@ -196,3 +196,106 @@
 (define-read-only (get-reply (reply-id uint))
   (map-get? replies { reply-id: reply-id })
 )
+
+(define-read-only (get-user-reputation (user principal))
+  (default-to {
+    total-upvotes: u0,
+    total-downvotes: u0,
+    threads-created: u0,
+    replies-created: u0,
+    tips-sent: u0,
+    tips-received: u0,
+    staked-amount: u0,
+    reputation-score: u0,
+  }
+    (map-get? user-reputation { user: user })
+  )
+)
+
+(define-read-only (get-thread-count)
+  (var-get thread-counter)
+)
+
+(define-read-only (get-reply-count)
+  (var-get reply-counter)
+)
+
+(define-read-only (has-premium-access
+    (thread-id uint)
+    (user principal)
+  )
+  (let ((thread-info (get-thread thread-id)))
+    (match thread-info
+      thread (if (get is-premium thread)
+        (is-some (map-get? premium-access {
+          thread-id: thread-id,
+          user: user,
+        }))
+        true
+      )
+      false
+    )
+  )
+)
+
+(define-read-only (get-user-vote-on-thread
+    (thread-id uint)
+    (user principal)
+  )
+  (map-get? thread-votes {
+    thread-id: thread-id,
+    voter: user,
+  })
+)
+
+(define-read-only (get-user-vote-on-reply
+    (reply-id uint)
+    (user principal)
+  )
+  (map-get? reply-votes {
+    reply-id: reply-id,
+    voter: user,
+  })
+)
+
+(define-read-only (get-thread-boost (thread-id uint))
+  (default-to {
+    boost-amount: u0,
+    boosted-by: (list),
+  }
+    (map-get? thread-boosts { thread-id: thread-id })
+  )
+)
+
+;; CORE PROTOCOL FUNCTIONS
+
+;; Thread Creation - Initialize New Discussion Topic
+(define-public (create-thread
+    (title (string-utf8 256))
+    (content (string-utf8 2048))
+    (is-premium bool)
+    (premium-price uint)
+  )
+  (let (
+      (thread-id (+ (var-get thread-counter) u1))
+      (current-time (get-current-time))
+    )
+    ;; Validation checks
+    (asserts! (is-user-staked tx-sender) ERR_INSUFFICIENT_STAKE)
+    (asserts! (> (len title) u0) ERR_INVALID_AMOUNT)
+    (asserts! (> (len content) u0) ERR_INVALID_AMOUNT)
+    (asserts! (or (not is-premium) (> premium-price u0)) ERR_INVALID_AMOUNT)
+    ;; Create thread entry
+    (map-set threads { thread-id: thread-id } {
+      author: tx-sender,
+      title: title,
+      content: content,
+      is-premium: is-premium,
+      premium-price: premium-price,
+      created-at: current-time,
+      upvotes: u0,
+      downvotes: u0,
+      tips-received: u0,
+      is-locked: false,
+      reply-count: u0,
+    })
